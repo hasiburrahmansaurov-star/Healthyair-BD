@@ -2,13 +2,22 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 import db, { initDB } from './db';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
+  
+  // Determine environment:
+  // - Production if NODE_ENV is 'production'
+  // - Production if running on Render (RENDER env var is set)
+  // - Otherwise, Development (AI Studio, local dev)
+  const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
+
+  console.log(`Starting server in ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} mode`);
 
   // Initialize DB
   await initDB();
@@ -53,6 +62,7 @@ async function startServer() {
   // Admin Routes
   app.get('/api/admin/orders', async (req, res) => {
     try {
+      // In a real app, add authentication middleware here
       const rs = await db.execute(`
         SELECT orders.*, products.name as product_name 
         FROM orders 
@@ -84,13 +94,24 @@ async function startServer() {
   });
 
   // Serve static files in production
-  if (process.env.NODE_ENV === 'production') {
-    app.use(express.static(path.resolve(__dirname, 'dist')));
+  if (isProduction) {
+    const distPath = path.resolve(__dirname, 'dist');
+    if (!fs.existsSync(distPath)) {
+      console.error(`CRITICAL ERROR: 'dist' folder not found at ${distPath}. Did you run 'npm run build'?`);
+    }
+
+    app.use(express.static(distPath));
     app.get('*', (req, res) => {
       if (req.path.startsWith('/api')) {
         return res.status(404).json({ error: 'Not found' });
       }
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+      
+      const indexPath = path.resolve(distPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(500).send('Error: dist/index.html not found. Please run npm run build.');
+      }
     });
   } else {
     const vite = await createViteServer({
