@@ -3,6 +3,7 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import { execSync } from 'child_process';
 import db, { initDB } from './db';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -100,14 +101,40 @@ async function startServer() {
 
   // Serve static files in production
   if (isProduction) {
-    // Use process.cwd() to be absolutely sure about the root
     const distPath = path.join(process.cwd(), 'dist');
-    console.log(`Serving static files from: ${distPath}`);
+    const indexPath = path.join(distPath, 'index.html');
 
+    console.log(`Checking build at: ${distPath}`);
+
+    // Self-healing: Check if build exists and is valid
+    let buildNeeded = false;
+    if (!fs.existsSync(distPath)) {
+      console.warn('⚠️ dist folder missing.');
+      buildNeeded = true;
+    } else if (!fs.existsSync(indexPath)) {
+      console.warn('⚠️ dist/index.html missing.');
+      buildNeeded = true;
+    } else {
+      const stats = fs.statSync(indexPath);
+      if (stats.size < 100) {
+        console.warn(`⚠️ dist/index.html is suspiciously small (${stats.size} bytes). It might be corrupted.`);
+        buildNeeded = true;
+      }
+    }
+
+    if (buildNeeded) {
+      console.log('🔄 Triggering emergency build...');
+      try {
+        execSync('npx vite build', { stdio: 'inherit' });
+        console.log('✅ Emergency build completed.');
+      } catch (buildError) {
+        console.error('❌ Emergency build failed:', buildError);
+      }
+    }
+
+    console.log(`Serving static files from: ${distPath}`);
     if (fs.existsSync(distPath)) {
       console.log('Contents of dist folder:', fs.readdirSync(distPath));
-    } else {
-      console.error(`CRITICAL ERROR: 'dist' folder not found at ${distPath}. Did you run 'npm run build'?`);
     }
 
     app.use(express.static(distPath));
@@ -117,12 +144,11 @@ async function startServer() {
         return res.status(404).json({ error: 'Not found' });
       }
       
-      const indexPath = path.join(distPath, 'index.html');
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
       } else {
         console.error(`index.html not found at ${indexPath}`);
-        res.status(500).send('Error: dist/index.html not found. Please run npm run build.');
+        res.status(500).send('Error: dist/index.html not found. Please check build logs.');
       }
     });
   } else {
