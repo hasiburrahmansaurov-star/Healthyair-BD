@@ -85,19 +85,14 @@ async function startServer() {
 
   // Serve static files in production
   if (process.env.NODE_ENV === 'production') {
-    // Serve files from the dist directory
     app.use(express.static(path.resolve(__dirname, 'dist')));
-
-    // Handle SPA routing - send all other requests to index.html
     app.get('*', (req, res) => {
-      // Skip API routes
       if (req.path.startsWith('/api')) {
         return res.status(404).json({ error: 'Not found' });
       }
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
     });
   } else {
-    // Vite middleware for development
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
