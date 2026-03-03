@@ -12,17 +12,22 @@ async function startServer() {
   const PORT = Number(process.env.PORT) || 3000;
   
   // Determine environment:
-  // - Production if NODE_ENV is 'production'
-  // - Production if running on Render (RENDER env var is set)
-  // - Otherwise, Development (AI Studio, local dev)
   const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
 
   console.log(`Starting server in ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} mode`);
+  console.log(`Current working directory: ${process.cwd()}`);
+  console.log(`__dirname: ${__dirname}`);
 
   // Initialize DB
   await initDB();
 
   app.use(express.json());
+
+  // Request logging middleware
+  app.use((req, res, next) => {
+    console.log(`${req.method} ${req.path}`);
+    next();
+  });
 
   // API Routes
   app.get('/api/products', async (req, res) => {
@@ -95,21 +100,28 @@ async function startServer() {
 
   // Serve static files in production
   if (isProduction) {
-    const distPath = path.resolve(__dirname, 'dist');
-    if (!fs.existsSync(distPath)) {
+    // Use process.cwd() to be absolutely sure about the root
+    const distPath = path.join(process.cwd(), 'dist');
+    console.log(`Serving static files from: ${distPath}`);
+
+    if (fs.existsSync(distPath)) {
+      console.log('Contents of dist folder:', fs.readdirSync(distPath));
+    } else {
       console.error(`CRITICAL ERROR: 'dist' folder not found at ${distPath}. Did you run 'npm run build'?`);
     }
 
     app.use(express.static(distPath));
+    
     app.get('*', (req, res) => {
       if (req.path.startsWith('/api')) {
         return res.status(404).json({ error: 'Not found' });
       }
       
-      const indexPath = path.resolve(distPath, 'index.html');
+      const indexPath = path.join(distPath, 'index.html');
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
       } else {
+        console.error(`index.html not found at ${indexPath}`);
         res.status(500).send('Error: dist/index.html not found. Please run npm run build.');
       }
     });
