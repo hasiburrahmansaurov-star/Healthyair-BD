@@ -120,3 +120,13 @@ export async function initDB() {
     } else {
       throw error; // Already local, just fail
     }
+  }
+}
+
+// Export a wrapper that always uses the current dbInstance
+// This allows us to swap the underlying client without breaking imports
+export default {
+  execute: (args: any) => dbInstance.execute(args),
+  batch: (args: any) => dbInstance.batch(args),
+  transaction: (mode: any) => dbInstance.transaction(mode),
+} as Client;
