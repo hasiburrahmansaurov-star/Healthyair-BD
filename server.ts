@@ -103,8 +103,20 @@ async function startServer() {
   if (isProduction) {
     const distPath = path.join(process.cwd(), 'dist');
     const indexPath = path.join(distPath, 'index.html');
+    const sourceIndexPath = path.join(process.cwd(), 'index.html');
 
     console.log(`Checking build at: ${distPath}`);
+
+    // Debug: Check source index.html
+    if (fs.existsSync(sourceIndexPath)) {
+      const sourceStats = fs.statSync(sourceIndexPath);
+      console.log(`Source index.html found. Size: ${sourceStats.size} bytes`);
+      if (sourceStats.size < 500) {
+        console.log('Source index.html content preview:', fs.readFileSync(sourceIndexPath, 'utf-8'));
+      }
+    } else {
+      console.error('❌ CRITICAL: Source index.html NOT FOUND in root!');
+    }
 
     // Self-healing: Check if build exists and is valid
     let buildNeeded = false;
